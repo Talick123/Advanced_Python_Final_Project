@@ -3,8 +3,7 @@ from math import *
 from PIL import Image
 
 def draw_point(imagae, center, radius):
-    color = np.array([0., 0.2, 0.2]) * 255
-
+    color = np.array([0.1, 0.1, 0.1]) * 255
     Y, X = np.ogrid[:h, :w]
     dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
     # calc where to color the circle
@@ -12,8 +11,65 @@ def draw_point(imagae, center, radius):
     image[circle_mask] = color
     return image
 
+# draw line from two given points in the matrix, i and j
+def connect_points(image, i, j, points):
+    color = [0, 0, 0]  # Black color
+    x1, y1 = points[i][0], points[i][1]
+    x2, y2 = points[j][0], points[j][1]
+    dx = abs(x2 - x1)
+    dy = abs(y2 - y1)
+    sx = 1 if x1 < x2 else -1
+    sy = 1 if y1 < y2 else -1
 
-# cube points
+    # Initialize the error variable
+    error = dx - dy
+
+    while x1 != x2 or y1 != y2:
+        # Draw the current point
+        image[int(y1), int(x1)] = color
+
+        # Calculate the next point
+        error2 = 2 * error
+        if error2 > -dy:
+            error -= dy
+            x1 += sx
+        if error2 < dx:
+            error += dx
+            y1 += sy
+    
+    return image
+
+
+# === Some sizes for calculation:
+h, w = 1080, 1920
+scale = 100
+circle_pos = [w/2, h/2]
+angle = pi/4 # 36°
+
+# === Some matrices for calculation:
+projection_matrix = np.matrix([
+    [1, 0, 0],
+    [0, 1, 0]
+    # [0, 0, 0] # not necessary
+])
+
+rotation_x = np.matrix([
+    [1, 0, 0],
+    [0, cos(angle), -sin(angle)],
+    [0, sin(angle), cos(angle)],
+])
+rotation_y = np.matrix([
+    [cos(angle), 0, sin(angle)],
+    [0, 1, 0],
+    [-sin(angle), 0, cos(angle)],
+])
+rotation_z = np.matrix([
+    [cos(angle), -sin(angle), 0],
+    [sin(angle), cos(angle), 0],
+    [0, 0, 1],
+])
+
+# === cube points
 points = []
 
 points.append(np.matrix([-1, -1, 1]))
@@ -25,18 +81,44 @@ points.append(np.matrix([1, -1, -1]))
 points.append(np.matrix([1, 1, -1]))
 points.append(np.matrix([-1, 1, -1]))
 
-# bg
-h, w = 1080, 1920
+projected_points = [
+    [n, n] for n in range(len(points))
+]
 
+# === bg
 bg_color = np.array([0.5, 0.5, 0.5]) * 255 # PIL need 0-255 values and not 0-1 rgb values
 image = np.zeros((h, w, 3), dtype=np.uint8)
 image[0:h, 0:w] = bg_color
 
+# === cube
+i = 0
+for point in points:
+    # reshape so the points look like that: [[-1], [1], [1]] .... 
+    # we actually want to rotate it only in x and y axis so we need to delete one of the rows here
+    rotated2d = np.dot(rotation_z, point.reshape((3, 1)))
+    rotated2d = np.dot(rotation_y, rotated2d)
+    rotated2d = np.dot(rotation_x, rotated2d)
+    # convert from 3d point to 2d point
+    projected2d = np.dot(projection_matrix, rotated2d)
+    # scale the x and y coordinates
+    x = int(projected2d.flat[0] * scale) + circle_pos[0]
+    y = int(projected2d.flat[1] * scale) + circle_pos[1]
+
+    projected_points[i] = [x, y]
+    image = draw_point(image, np.array([x, y]), 5)
+    i += 1
+
+for p in range(4):
+    connect_points(image, p, (p+1) % 4, projected_points)
+    connect_points(image, p+4, ((p+1) % 4) + 4, projected_points)
+    connect_points(image, p, (p+4), projected_points)
+    
 # some point
-image = draw_point(image, np.array([600, 400]), 5)
 img = Image.fromarray(image, 'RGB')
 img.save('my.png')
 img.show()
+
+
 
 
 

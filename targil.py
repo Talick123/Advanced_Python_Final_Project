@@ -2,8 +2,8 @@ import numpy as np
 from math import *
 from PIL import Image
 
-def draw_point(imagae, center, radius):
-    color = np.array([0.1, 0.1, 0.1]) * 255
+def draw_point(imagae, center, radius, color = [0.1, 0.1, 0.1]):
+    color = np.array(color) * 255
     Y, X = np.ogrid[:h, :w]
     dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
     # calc where to color the circle
@@ -44,7 +44,16 @@ def connect_points(image, i, j, points):
 h, w = 1080, 1920
 scale = 100
 circle_pos = [w/2, h/2]
+normal = np.matrix([0, 0, 1])
+camera = np.matrix([0.736, -0.585, 0.338]).reshape(3,1)
+n_c_mul = np.dot(normal, camera)
+angle = np.arccos(n_c_mul.flat[0])
+
+
 angle = pi/4 # 36°
+angleX = angle #np.deg2rad(-20)
+angleY = angle #np.deg2rad(-57.7)
+angleZ = angle #np.deg2rad(0) 
 
 # === Some matrices for calculation:
 projection_matrix = np.matrix([
@@ -55,21 +64,22 @@ projection_matrix = np.matrix([
 
 rotation_x = np.matrix([
     [1, 0, 0],
-    [0, cos(angle), -sin(angle)],
-    [0, sin(angle), cos(angle)],
+    [0, cos(angleX), -sin(angleX)],
+    [0, sin(angleX), cos(angleX)],
 ])
 rotation_y = np.matrix([
-    [cos(angle), 0, sin(angle)],
+    [cos(angleY), 0, sin(angleY)],
     [0, 1, 0],
-    [-sin(angle), 0, cos(angle)],
+    [-sin(angleY), 0, cos(angleY)],
 ])
 rotation_z = np.matrix([
-    [cos(angle), -sin(angle), 0],
-    [sin(angle), cos(angle), 0],
+    [cos(angleZ), -sin(angleZ), 0],
+    [sin(angleZ), cos(angleZ), 0],
     [0, 0, 1],
 ])
 
 # === cube points
+# TODO: calculate the points by the given cube center
 points = []
 
 points.append(np.matrix([-1, -1, 1]))
@@ -96,8 +106,10 @@ for point in points:
     # reshape so the points look like that: [[-1], [1], [1]] .... 
     # we actually want to rotate it only in x and y axis so we need to delete one of the rows here
     rotated2d = np.dot(rotation_z, point.reshape((3, 1)))
-    rotated2d = np.dot(rotation_y, rotated2d)
-    rotated2d = np.dot(rotation_x, rotated2d)
+    rotated2d = np.dot(rotation_y, rotated2d) # NOGA:
+    rotated2d = np.dot(rotation_x, rotated2d) # or this?
+
+
     # convert from 3d point to 2d point
     projected2d = np.dot(projection_matrix, rotated2d)
     # scale the x and y coordinates
@@ -105,7 +117,14 @@ for point in points:
     y = int(projected2d.flat[1] * scale) + circle_pos[1]
 
     projected_points[i] = [x, y]
-    image = draw_point(image, np.array([x, y]), 5)
+
+    # delete later
+    if i == 0: color = [1,0,0]
+    elif i == 1: color = [0,0,1] 
+    elif i == 2: color = [1,1,0] 
+    else: color = [0,0,0]
+
+    image = draw_point(image, np.array([x, y]), 5, color)
     i += 1
 
 for p in range(4):

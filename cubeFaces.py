@@ -1,6 +1,24 @@
+# import numpy as np
+# from PIL import Image, ImageDraw
+
+# # Define the four points of the quadrilateral
+# points = np.array([[50, 50], [200, 50], [150, 200], [100, 150]])
+
+# # Create a blank image
+# width, height = 300, 300
+# image = Image.new("RGB", (width, height), "white")
+# draw = ImageDraw.Draw(image)
+
+# # Draw the quadrilateral using the defined points
+# draw.polygon(tuple(map(tuple, points)), fill="red")
+
+# # Display or save the image
+# image.show()
+# # image.save("quadrilateral.png")
+
 import numpy as np
 from math import *
-from PIL import Image
+from PIL import Image, ImageDraw
 
 def draw_point(image, center, radius, color = [0.1, 0.1, 0.1]):
     color = np.array(color) * 255
@@ -13,10 +31,10 @@ def draw_point(image, center, radius, color = [0.1, 0.1, 0.1]):
 
 # draw line from two given points in the matrix, i and j
 def connect_points(image, i, j, points):
-    print(f"i: {i}, j:{j}")
+    # print(f"i: {i}, j:{j}")
     color = [0, 0, 0]  # Black color
     if i == 0 and j == 1:
-        print("HELLO")
+        # print("HELLO")
         color = [1.,1,0]
     x1, y1 = points[i][0], points[i][1]
     x2, y2 = points[j][0], points[j][1]
@@ -55,7 +73,7 @@ def create_image(h, w):
 # some of the variables here can be global constants (I think) - depending on whether we need them or not
 # for example : projection_matrix, rotation_z/y/z, scale, projected_points,
 # points (?) also depending on how we calculate it
-def create_cube(image, circle_pos, angleX, angleY, angleZ): 
+def create_cube(image, circle_pos, angleX, angleY, angleZ, image_pil): 
     rotation_x = get_rotation_mat_x(angleX)
     rotation_y = get_rotation_mat_y(angleY)
     rotation_z = get_rotation_mat_z(angleZ)
@@ -90,6 +108,28 @@ def create_cube(image, circle_pos, angleX, angleY, angleZ):
         connect_points(image, p, (p+1) % 4, projected_points)
         connect_points(image, p+4, ((p+1) % 4) + 4, projected_points)
         connect_points(image, p, (p+4), projected_points)
+
+    # NOGA: fill the area of 4 points, also added to the function "image_pil" argument
+    # # Fill the quadrilateral area with a specific color
+    quadrilateral_points = [tuple(point) for point in projected_points[:4]]
+    draw = ImageDraw.Draw(image_pil)
+    draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
+
+    quadrilateral_points = [tuple(point) for point in projected_points[4:]]
+    draw = ImageDraw.Draw(image_pil)
+    draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
+
+    # NOTE: the order of the points in the array matter!!!
+    y = [projected_points[1], projected_points[0], projected_points[4], projected_points[5]]
+    quadrilateral_points = [tuple(point) for point in y]
+    draw = ImageDraw.Draw(image_pil)
+    draw.polygon(quadrilateral_points, fill=(12, 200, 15))  # Fill with red color
+
+    # NOTE: the order of the points in the array matter!!!
+    y = [projected_points[3], projected_points[2], projected_points[6], projected_points[7]]
+    quadrilateral_points = [tuple(point) for point in y]
+    draw = ImageDraw.Draw(image_pil)
+    draw.polygon(quadrilateral_points, fill=(180, 200, 15))  # Fill with red color
 
     return image
 
@@ -176,12 +216,21 @@ angleZ = angle #np.deg2rad(0)
 # size + bg
 image = create_image(1080, 1920)
 
+image_pil = Image.fromarray(image, 'RGB')
+
 # cube1
-image = create_cube(image, circle_pos1, 0, 0, np.deg2rad(-57.7))
+image = create_cube(image, circle_pos1, 0, 0, np.deg2rad(-57.7), image_pil)
 # cube2
-image = create_cube(image, circle_pos2, 0, 0, np.deg2rad(-55.9)) # OK, cool, 
+image = create_cube(image, circle_pos2, 0, 0, np.deg2rad(-55.9), image_pil) # OK, cool, 
 
 # display + save as png image
-img = Image.fromarray(image, 'RGB')
-img.save('my.png')
-img.show()
+# img = Image.fromarray(image, 'RGB')
+# # img.save('my.png')
+# img.show()
+
+image_pil.save('image2.png')
+image_pil.show()
+
+
+
+

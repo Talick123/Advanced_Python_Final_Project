@@ -1,79 +1,103 @@
-# import numpy as np
-# from PIL import Image, ImageDraw
-
-# # Define the four points of the quadrilateral
-# points = np.array([[50, 50], [200, 50], [150, 200], [100, 150]])
-
-# # Create a blank image
-# width, height = 300, 300
-# image = Image.new("RGB", (width, height), "white")
-# draw = ImageDraw.Draw(image)
-
-# # Draw the quadrilateral using the defined points
-# draw.polygon(tuple(map(tuple, points)), fill="red")
-
-# # Display or save the image
-# image.show()
-# # image.save("quadrilateral.png")
-
 import numpy as np
 from math import *
 from PIL import Image, ImageDraw
+from collections import namedtuple
 
-def draw_point(image, center, radius, color = [0.1, 0.1, 0.1]):
-    color = np.array(color) * 255
-    Y, X = np.ogrid[:h, :w]
-    dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
-    # calc where to color the circle
-    circle_mask = dist_from_center <= radius
-    image[circle_mask] = color
-    return image
+# ====================MACROS====================
+IMAGE_HEIGHT = 1080
+IMAGE_WIDTH = 1920
+XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"])
 
-# draw line from two given points in the matrix, i and j
-def connect_points(image, i, j, points):
-    # print(f"i: {i}, j:{j}")
-    color = [0, 0, 0]  # Black color
-    if i == 0 and j == 1:
-        # print("HELLO")
-        color = [1.,1,0]
-    x1, y1 = points[i][0], points[i][1]
-    x2, y2 = points[j][0], points[j][1]
-    dx = abs(x2 - x1)
-    dy = abs(y2 - y1)
-    sx = 1 if x1 < x2 else -1
-    sy = 1 if y1 < y2 else -1
+# ====================GIVEN DATA====================
+CAMERA_POS   = XYZ_VALUES(0.736, -0.585, 0.338)
+LIGHT_SOURCE = XYZ_VALUES(0.563, 0.139, 0.815)
+CUBE1_POS    = XYZ_VALUES(1.58, 0.08, 0.5)
+CUBE2_POS    = XYZ_VALUES(0.58, -1.2, 0.5)
+CUBE3_POS    = XYZ_VALUES(-0.75, 0.43, 0.5)
+CUBE4_POS    = XYZ_VALUES(0.67, 1.15, 0.5)
 
-    # Initialize the error variable
-    error = dx - dy
+CUBE1_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-57.7))
+CUBE2_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-55.9))
+CUBE3_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-56.5))
+CUBE4_ROT    = XYZ_VALUES(0, 0, 0)
 
-    while x1 != x2 or y1 != y2:
-        # Draw the current point
-        image[int(y1), int(x1)] = color
+# ====================MATRICES CONSTANTS====================
+projection_matrix = np.array([
+    [1, 0, 0],
+    [0, 1, 0]
+    # [0, 0, 0] # not necessary
+])
 
-        # Calculate the next point
-        error2 = 2 * error
-        if error2 > -dy:
-            error -= dy
-            x1 += sx
-        if error2 < dx:
-            error += dx
-            y1 += sy
-    
-    return image
+# camera()
+camera_xyz = np.array([
+    [0.621, 0.782, 0], #X'
+    [-0.265, 0.211, 0.941], #Y'
+    [0.736, -0.585, 0.338], #Z'
+])
 
-# create the full image with the background and size
-def create_image(h, w):
-    # === bg
+# === cube points
+# TODO: calculate the points by the given cube center
+points = np.array([
+    [-1, -1, 1],
+    [1, -1, 1],
+    [1, 1, 1],
+    [-1, 1, 1],
+    [-1, -1, -1],
+    [1, -1, -1],
+    [1, 1, -1],
+    [-1, 1, -1]
+])
+
+projected_points = [
+    [n, n] for n in range(len(points))
+]
+
+# ====================CALCULATION MATRICES====================
+# functions to get the roation matrix by given angle for each axis
+
+def get_rotation_mat_x(angle):
+    return np.array([
+        [1, 0, 0],
+        [0, np.cos(angle), -np.sin(angle)],
+        [0, np.sin(angle), np.cos(angle)],
+    ])
+
+def get_rotation_mat_y(angle):
+    return np.array([
+        [np.cos(angle), 0, np.sin(angle)],
+        [0, 1, 0],
+        [-np.sin(angle), 0, np.cos(angle)],
+    ])
+
+def get_rotation_mat_z(angle):
+    return np.array([
+        [np.cos(angle), -np.sin(angle), 0],
+        [np.sin(angle), np.cos(angle), 0],
+        [0, 0, 1],
+    ])
+
+# ====================TEMP CALCULATIONS==================== will most likely be removed
+scale = 100
+center_pos1 = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
+center_pos2 = [IMAGE_WIDTH/4, IMAGE_HEIGHT/3]
+
+def create_image(height, width):
+    '''
+    Receives height and width of image
+    Returns image with background colour represented as a 2D matrix
+    '''
     bg_color = np.array([0.5, 0.5, 0.5]) * 255 # PIL need 0-255 values and not 0-1 rgb values
-    image = np.zeros((h, w, 3), dtype=np.uint8)
-    image[0:h, 0:w] = bg_color
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    image[0:height, 0:width] = bg_color
     return image
-    pass
 
 # some of the variables here can be global constants (I think) - depending on whether we need them or not
 # for example : projection_matrix, rotation_z/y/z, scale, projected_points,
 # points (?) also depending on how we calculate it
-def create_cube(image, circle_pos, angleX, angleY, angleZ, image_pil): 
+def create_cube(center_pos, angleX, angleY, angleZ, image_pil): 
+    '''
+    Main function to create cubes in 2D image given 3D position and rotation
+    '''
     rotation_x = get_rotation_mat_x(angleX)
     rotation_y = get_rotation_mat_y(angleY)
     rotation_z = get_rotation_mat_z(angleZ)
@@ -90,24 +114,12 @@ def create_cube(image, circle_pos, angleX, angleY, angleZ, image_pil):
         # convert from 3d point to 2d point
         projected2d = np.dot(projection_matrix, rotated2d)
         # scale the x and y coordinates
-        x = int(projected2d.flat[0] * scale) + circle_pos[0]
-        y = int(projected2d.flat[1] * scale) + circle_pos[1]
+        x = int(projected2d.flat[0] * scale) + center_pos[0]
+        y = int(projected2d.flat[1] * scale) + center_pos[1]
 
         projected_points[i] = [x, y]
 
-        # delete later
-        if i == 0: color = [1,0,0]
-        elif i == 1: color = [0,0,1] 
-        elif i == 2: color = [1,1,0] 
-        else: color = [0,0,0]
-
-        image = draw_point(image, np.array([x, y]), 5, color)
         i += 1
-
-    for p in range(4):
-        connect_points(image, p, (p+1) % 4, projected_points)
-        connect_points(image, p+4, ((p+1) % 4) + 4, projected_points)
-        connect_points(image, p, (p+4), projected_points)
 
     # NOGA: fill the area of 4 points, also added to the function "image_pil" argument
     # # Fill the quadrilateral area with a specific color
@@ -131,106 +143,20 @@ def create_cube(image, circle_pos, angleX, angleY, angleZ, image_pil):
     draw = ImageDraw.Draw(image_pil)
     draw.polygon(quadrilateral_points, fill=(180, 200, 15))  # Fill with red color
 
-    return image
 
-# === Some matrices for calculation:
-# also functions to get the roation matrix by given angle for each axis
-def get_rotation_mat_x(angle):
-    return np.matrix([
-        [1, 0, 0],
-        [0, cos(angle), -sin(angle)],
-        [0, sin(angle), cos(angle)],
-    ])
+if __name__ == "__main__":
+    # creating size + background
+    image = create_image(IMAGE_HEIGHT, IMAGE_WIDTH)
 
-def get_rotation_mat_y(angle):
-    return np.matrix([
-        [cos(angle), 0, sin(angle)],
-        [0, 1, 0],
-        [-sin(angle), 0, cos(angle)],
-    ])
+    image_pil = Image.fromarray(image, 'RGB')
 
-def get_rotation_mat_z(angle):
-    return np.matrix([
-        [cos(angle), -sin(angle), 0],
-        [sin(angle), cos(angle), 0],
-        [0, 0, 1],
-    ])
+    #TODO convert 3D cube centers to 2D cube centers
 
-# like constant maybe
-projection_matrix = np.matrix([
-    [1, 0, 0],
-    [0, 1, 0]
-    # [0, 0, 0] # not necessary
-])
+    # cube1
+    create_cube(center_pos1, 0, 0, CUBE1_ROT.z, image_pil)
+    # cube2
+    create_cube(center_pos2, 0, 0, CUBE4_ROT.z, image_pil)
 
-# def camera():
-#     # the z' perpendicular to y' and x' to z and y'
-#     camera_z = [0.736, -0.585, 0.338]
-#     camera_y = [-0.736, 0.585]
-#     c = (camera_z[0] * camera_y[0] + camera_z[1] * camera_y[1]) / (-0.338)
-#     camera_y.append(c)
-#     magnitude = np.linalg.norm(camera_y)
-#     # Normalize the vector
-#     normalized_vector = camera_y / magnitude
-#     print(normalized_vector ,camera_z)
-
-
-# camera()
-camera_xyz = np.matrix([
-    [0.621, 0.782, 0], #X'
-    [-0.265, 0.211, 0.941], #Y'
-    [0.736, -0.585, 0.338], #Z'
-])
-
-# === cube points
-# TODO: calculate the points by the given cube center
-points = np.array([
-    [-1, -1, 1],
-    [1, -1, 1],
-    [1, 1, 1],
-    [-1, 1, 1],
-    [-1, -1, -1],
-    [1, -1, -1],
-    [1, 1, -1],
-    [-1, 1, -1]
-])
-
-projected_points = [
-    [n, n] for n in range(len(points))
-]
-
-# === Some sizes for calculation:
-h, w = 1080, 1920 # like constant maybe
-scale = 100  # like constant maybe
-circle_pos1 = [w/2, h/2]
-circle_pos2 = [w/4, h/3]
-# normal = np.matrix([0, 0, 1])
-# camera = np.matrix([0.736, -0.585, 0.338]).reshape(3,1)
-# n_c_mul = np.dot(normal, camera)
-# angle = np.arccos(n_c_mul.flat[0])
-angle = pi/4 # 36°
-angleX = angle #np.deg2rad(-20)
-angleY = angle #np.deg2rad(-57.7)
-angleZ = angle #np.deg2rad(0) 
-
-# size + bg
-image = create_image(1080, 1920)
-
-image_pil = Image.fromarray(image, 'RGB')
-
-# cube1
-image = create_cube(image, circle_pos1, 0, 0, np.deg2rad(-57.7), image_pil)
-# cube2
-image = create_cube(image, circle_pos2, 0, 0, np.deg2rad(-55.9), image_pil) # OK, cool, 
-
-# display + save as png image
-# img = Image.fromarray(image, 'RGB')
-# # img.save('my.png')
-# img.show()
-
-image_pil.save('image2.png')
-image_pil.show()
-
-
-
+    image_pil.save('image2.png')
+    image_pil.show()
 

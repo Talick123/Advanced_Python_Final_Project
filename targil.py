@@ -185,3 +185,54 @@ image = create_cube(image, circle_pos2, 0, 0, np.deg2rad(-55.9)) # OK, cool,
 img = Image.fromarray(image, 'RGB')
 img.save('my.png')
 img.show()
+
+
+#================================================================== from cubeFaces.py
+
+def draw_point(image, center, radius, color = [0.1, 0.1, 0.1]):
+    '''
+    Temporary function for development
+    Draws a point in an image represented by a 2D matrix with a given color
+    '''
+    color = np.array(color) * 255
+    Y, X = np.ogrid[:IMAGE_HEIGHT, :IMAGE_WIDTH]
+    dist_from_center = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+    # calc where to color the circle
+    circle_mask = dist_from_center <= radius
+    image[circle_mask] = color
+    return image
+
+def connect_points(image, i, j, points):
+    '''
+    Temporary function for development
+    Draws a line in an image represented by a 2D matrix connecting two given points
+    '''
+    # print(f"i: {i}, j:{j}")
+    color = [0, 0, 0]  # Black color
+    if i == 0 and j == 1:
+        # print("HELLO")
+        color = [1.,1,0]
+    x1, y1 = points[i][0], points[i][1]
+    x2, y2 = points[j][0], points[j][1]
+    dx = abs(x2 - x1)
+    dy = abs(y2 - y1)
+    sx = 1 if x1 < x2 else -1
+    sy = 1 if y1 < y2 else -1
+
+    # Initialize the error variable
+    error = dx - dy
+
+    while x1 != x2 or y1 != y2:
+        # Draw the current point
+        image[int(y1), int(x1)] = color
+
+        # Calculate the next point
+        error2 = 2 * error
+        if error2 > -dy:
+            error -= dy
+            x1 += sx
+        if error2 < dx:
+            error += dx
+            y1 += sy
+    
+    return image

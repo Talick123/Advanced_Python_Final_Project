@@ -35,7 +35,7 @@ CUBE4 = CubeData(name="CUBE4", position=XYZ_VALUES(0.67, 1.15, 0.5), rotation=XY
 projection_matrix = np.array([
     [1, 0, 0],
     [0, 1, 0],
-    [0, 0, 0] # not necessary
+    # [0, 0, 0] # not necessary
 ])
 
 # calculated manually
@@ -49,27 +49,16 @@ camera_xyz = np.array([
 camera_view_direction = np.array([CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z])
 
 # indexed corners of cubes
+# finding normal vector to face via p1, p3, p4 : p4 - p1, p3 - p1
 faces = [
     [0, 1, 2, 3], # Bottom face
-    [4, 5, 6, 7], # Top face
+    [5, 6, 7, 4], # Top face
     [0, 1, 5, 4], # Front face
     [2, 3, 7, 6], # Back face
     [0, 3, 7, 4], # Left face
     [1, 2, 6, 5], # Right face
 ]
 
-# === cube points
-# TODO: calculate the points by the given cube center
-# points = np.array([
-#     [-1, -1, 1],
-#     [1, -1, 1],
-#     [1, 1, 1],
-#     [-1, 1, 1],
-#     [-1, -1, -1],
-#     [1, -1, -1],
-#     [1, 1, -1],
-#     [-1, 1, -1]
-# ])
 points = np.array([[-0.5, -0.5, -0.5],  # index 0
                    [0.5, -0.5, -0.5],   # index 1
                    [0.5, 0.5, -0.5],    # index 2
@@ -121,7 +110,7 @@ def calculate_normal_of_cube_face(p1, p2, p3, p4):
     Function to calculate the normal vector of a face given four corner points
     '''
     # Calculate two vectors from the points of the face
-    v1 = p2 - p1
+    v1 = p4 - p1
     v2 = p3 - p1
     # Calculate the normal vector by taking the cross product of v1 and v2
     normal = np.cross(v1, v2)
@@ -165,12 +154,12 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
     transformed_points_3d = np.zeros_like(points)
 
     for i, point in enumerate(points):
-        # translate point relative to cube's position (center of cube)
-        translated_point = point + np.array([cube_center.x, cube_center.y, cube_center.z])
         # rotate object
-        rotated3d = np.dot(rotation_z, np.dot(rotation_y, np.dot(rotation_x, translated_point)))
+        rotated3d = np.dot(rotation_z, np.dot(rotation_y, np.dot(rotation_x, point)))
+        # translate point relative to cube's position (center of cube)
+        translated_point = rotated3d + np.array([cube_center.x, cube_center.y, cube_center.z])
         # translate points to view from camera angle
-        transformed_points_3d[i] = np.dot(camera_xyz, rotated3d)
+        transformed_points_3d[i] = np.dot(camera_xyz, translated_point)
 
         # convert from 3d point to 2d point
         projected2d = np.dot(projection_matrix, transformed_points_3d[i])
@@ -181,7 +170,7 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
         projected_points[i] = [x, y]
 
     # Check if each face should be drawn
-    for i, face_indices in enumerate(faces):
+    for face_indices in faces:
         if should_draw_face(transformed_points_3d, face_indices):
             print(f"Face {face_indices} should be drawn.")
             face_points_2d = [projected_points[i] for i in face_indices]
@@ -219,6 +208,8 @@ if __name__ == "__main__":
 
     print(f"The order in which the cubes should be drawn is:")
     for cube in order_to_draw:
+        # if cube.name != "CUBE4":
+        #     continue
         print(cube)
         create_cube(cube.position, cube.rotation, image_pil, cube.colour)
 

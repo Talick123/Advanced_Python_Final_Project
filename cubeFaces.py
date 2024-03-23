@@ -6,51 +6,80 @@ from collections import namedtuple
 # ====================MACROS====================
 IMAGE_HEIGHT = 1080
 IMAGE_WIDTH = 1920
-XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"])
+XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"], defaults=(0,))
+IMAGE_CENTER = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
+SCALE = 350
 
 # ====================GIVEN DATA====================
 CAMERA_POS   = XYZ_VALUES(0.736, -0.585, 0.338)
 LIGHT_SOURCE = XYZ_VALUES(0.563, 0.139, 0.815)
-CUBE1_POS    = XYZ_VALUES(1.58, 0.08, 0.5)
-CUBE2_POS    = XYZ_VALUES(0.58, -1.2, 0.5)
-CUBE3_POS    = XYZ_VALUES(-0.75, 0.43, 0.5)
-CUBE4_POS    = XYZ_VALUES(0.67, 1.15, 0.5)
 
-CUBE1_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-57.7))
-CUBE2_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-55.9))
-CUBE3_ROT    = XYZ_VALUES(0, 0, np.deg2rad(-56.5))
-CUBE4_ROT    = XYZ_VALUES(0, 0, 0)
+class CubeData():
+    def __init__(self, name, position, rotation, colour):
+        self.name = name
+        self.position = position
+        self.rotation = rotation
+        self.colour = colour
+
+    def __str__(self):
+        return f"{self.name}: Colour {self.colour}"
+
+CUBE1 = CubeData(name="CUBE1", position=XYZ_VALUES(1.58, 0.08, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-57.7)), colour=(153, 153, 153)) # GREY
+CUBE2 = CubeData(name="CUBE2", position=XYZ_VALUES(0.58, -1.2, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-55.9)), colour=(191, 128, 51)) # ORANGE
+CUBE3 = CubeData(name="CUBE3", position=XYZ_VALUES(-0.75, 0.43, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-56.5)), colour=(179, 77, 179)) # PURPLE
+CUBE4 = CubeData(name="CUBE4", position=XYZ_VALUES(0.67, 1.15, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(0)), colour=(120, 204, 107)) # GREEN
 
 # ====================MATRICES CONSTANTS====================
+
+# This is used to convert a 3D point to a 2D point
 projection_matrix = np.array([
     [1, 0, 0],
-    [0, 1, 0]
-    # [0, 0, 0] # not necessary
+    [0, 1, 0],
+    [0, 0, 0] # not necessary
 ])
 
-# camera()
+# calculated manually
 camera_xyz = np.array([
     [0.621, 0.782, 0], #X'
     [-0.265, 0.211, 0.941], #Y'
     [0.736, -0.585, 0.338], #Z'
 ])
 
+# Define the camera's view direction (Z' vector from camera_xyz matrix)
+camera_view_direction = np.array([CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z])
+
+# indexed corners of cubes
+faces = [
+    [0, 1, 2, 3], # Bottom face
+    [4, 5, 6, 7], # Top face
+    [0, 1, 5, 4], # Front face
+    [2, 3, 7, 6], # Back face
+    [0, 3, 7, 4], # Left face
+    [1, 2, 6, 5], # Right face
+]
+
 # === cube points
 # TODO: calculate the points by the given cube center
-points = np.array([
-    [-1, -1, 1],
-    [1, -1, 1],
-    [1, 1, 1],
-    [-1, 1, 1],
-    [-1, -1, -1],
-    [1, -1, -1],
-    [1, 1, -1],
-    [-1, 1, -1]
-])
+# points = np.array([
+#     [-1, -1, 1],
+#     [1, -1, 1],
+#     [1, 1, 1],
+#     [-1, 1, 1],
+#     [-1, -1, -1],
+#     [1, -1, -1],
+#     [1, 1, -1],
+#     [-1, 1, -1]
+# ])
+points = np.array([[-0.5, -0.5, -0.5],  # index 0
+                   [0.5, -0.5, -0.5],   # index 1
+                   [0.5, 0.5, -0.5],    # index 2
+                   [-0.5, 0.5, -0.5],   # index 3
+                   [-0.5, -0.5, 0.5],   # index 4
+                   [0.5, -0.5, 0.5],    # index 5
+                   [0.5, 0.5, 0.5],     # index 6
+                   [-0.5, 0.5, 0.5]])   # index 7
 
-projected_points = [
-    [n, n] for n in range(len(points))
-]
+projected_points = np.zeros((len(points),2))
 
 # ====================CALCULATION MATRICES====================
 # functions to get the roation matrix by given angle for each axis
@@ -76,11 +105,7 @@ def get_rotation_mat_z(angle):
         [0, 0, 1],
     ])
 
-# ====================TEMP CALCULATIONS==================== will most likely be removed
-scale = 100
-center_pos1 = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
-center_pos2 = [IMAGE_WIDTH/4, IMAGE_HEIGHT/3]
-
+# ====================IMAGE CREATION FUNCTIONS==================== 
 def create_image(height, width):
     '''
     Receives height and width of image
@@ -91,72 +116,164 @@ def create_image(height, width):
     image[0:height, 0:width] = bg_color
     return image
 
-# some of the variables here can be global constants (I think) - depending on whether we need them or not
-# for example : projection_matrix, rotation_z/y/z, scale, projected_points,
-# points (?) also depending on how we calculate it
-def create_cube(center_pos, angleX, angleY, angleZ, image_pil): 
+def calculate_normal_of_cube_face(p1, p2, p3, p4):
     '''
-    Main function to create cubes in 2D image given 3D position and rotation
+    Function to calculate the normal vector of a face given four corner points
     '''
-    rotation_x = get_rotation_mat_x(angleX)
-    rotation_y = get_rotation_mat_y(angleY)
-    rotation_z = get_rotation_mat_z(angleZ)
-    
-    i = 0
-    for point in points:
-        # reshape so the points look like that: [[-1], [1], [1]] .... 
-        # we actually want to rotate it only in x and y axis so we need to delete one of the rows here
-        rotated2d = np.dot(rotation_z, point.reshape((3, 1)))
-        rotated2d = np.dot(rotation_y, rotated2d) # NOGA:
-        rotated2d = np.dot(rotation_x, rotated2d) # or this?
-        rotated2d = np.dot(camera_xyz, rotated2d) # or this?
+    # Calculate two vectors from the points of the face
+    v1 = p2 - p1
+    v2 = p3 - p1
+    # Calculate the normal vector by taking the cross product of v1 and v2
+    normal = np.cross(v1, v2)
+    # Normalize the normal vector
+    normal = normal / np.linalg.norm(normal)
+    return normal
+
+def should_draw_face(points, face_indices):
+    '''
+    Function to determine if a face should be drawn by calculating the dot product the vector representing
+    the normal of the face of the cube and the vector representing the camera angle
+    '''
+    # Get the corner points of the face
+    p1, p2, p3, p4 = [points[i] for i in face_indices]
+    # Calculate the normal vector of the face
+    normal = calculate_normal_of_cube_face(p1, p2, p3, p4)
+    # Calculate the dot product of the normal vector and the camera's view direction
+    dot_product = np.dot(normal, camera_view_direction)
+    # If the dot product is negative, the face is visible and should be drawn
+    return dot_product < 0
+
+def draw_face(image_pil, face_points_2d, cube_colour):
+    '''
+    Receives: image to draw on, 4 2D points, cube colour
+    Draws the face of the cube represented by the 4 points onto the image
+    '''
+    face_points = [(point[0], point[1]) for point in face_points_2d]
+    draw = ImageDraw.Draw(image_pil)
+    draw.polygon(face_points, fill=(cube_colour))
+
+def create_cube(cube_center, rotation_angle, image_pil, cube_colour): 
+    '''
+    Main function to create cubes in 2D image given 3D position and rotation.
+    Receives center position of cube, rotation angle and image on which we are projecting.
+    '''
+    rotation_x = get_rotation_mat_x(rotation_angle.x)
+    rotation_y = get_rotation_mat_y(rotation_angle.y)
+    rotation_z = get_rotation_mat_z(rotation_angle.z)
+
+    # Initialize an array to hold the transformed 3D points
+    transformed_points_3d = np.zeros_like(points)
+
+    for i, point in enumerate(points):
+        # translate point relative to cube's position (center of cube)
+        translated_point = point + np.array([cube_center.x, cube_center.y, cube_center.z])
+        # rotate object
+        rotated3d = np.dot(rotation_z, np.dot(rotation_y, np.dot(rotation_x, translated_point)))
+        # translate points to view from camera angle
+        transformed_points_3d[i] = np.dot(camera_xyz, rotated3d)
 
         # convert from 3d point to 2d point
-        projected2d = np.dot(projection_matrix, rotated2d)
-        # scale the x and y coordinates
-        x = int(projected2d.flat[0] * scale) + center_pos[0]
-        y = int(projected2d.flat[1] * scale) + center_pos[1]
+        projected2d = np.dot(projection_matrix, transformed_points_3d[i])
+        # scale the x and y coordinates and place relative to center of image
+        x = int(projected2d[0] * SCALE) + IMAGE_CENTER[0]
+        y = int(projected2d[1] * SCALE) + IMAGE_CENTER[1]
 
         projected_points[i] = [x, y]
 
-        i += 1
+    # Check if each face should be drawn
+    for i, face_indices in enumerate(faces):
+        if should_draw_face(transformed_points_3d, face_indices):
+            print(f"Face {face_indices} should be drawn.")
+            face_points_2d = [projected_points[i] for i in face_indices]
+            draw_face(image_pil, face_points_2d, cube_colour)
+        else:
+            print(f"Face {face_indices} should not be drawn.")
 
-    # NOGA: fill the area of 4 points, also added to the function "image_pil" argument
-    # # Fill the quadrilateral area with a specific color
-    quadrilateral_points = [tuple(point) for point in projected_points[:4]]
-    draw = ImageDraw.Draw(image_pil)
-    draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
+def distance_from_camera(camera_pos, cube_pos):
+    '''
+    Function to calculate the distance from the camera to a cube
+    '''
+    return np.sqrt((camera_pos.x - cube_pos.x) ** 2 + 
+                   (camera_pos.y - cube_pos.y) ** 2 + 
+                   (camera_pos.z - cube_pos.z) ** 2)
 
-    quadrilateral_points = [tuple(point) for point in projected_points[4:]]
-    draw = ImageDraw.Draw(image_pil)
-    draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
-
-    # NOTE: the order of the points in the array matter!!!
-    y = [projected_points[1], projected_points[0], projected_points[4], projected_points[5]]
-    quadrilateral_points = [tuple(point) for point in y]
-    draw = ImageDraw.Draw(image_pil)
-    draw.polygon(quadrilateral_points, fill=(12, 200, 15))  # Fill with red color
-
-    # NOTE: the order of the points in the array matter!!!
-    y = [projected_points[3], projected_points[2], projected_points[6], projected_points[7]]
-    quadrilateral_points = [tuple(point) for point in y]
-    draw = ImageDraw.Draw(image_pil)
-    draw.polygon(quadrilateral_points, fill=(180, 200, 15))  # Fill with red color
+def draw_order(camera_pos, cubes):
+    '''
+    Function to determine the order in which the cubes are drawn
+    '''
+    # Calculate the distance from the camera to each cube and store it with the cube's identifier
+    distances = [(cube, distance_from_camera(camera_pos, cube.position)) for cube in cubes]
+    # Sort the cubes by their distance from the camera (furthest to closest)
+    sorted_cubes = sorted(distances, key=lambda x: x[1], reverse=True)
+    # Return the order in which the cubes should be drawn
+    return [cube[0] for cube in sorted_cubes]
 
 
 if __name__ == "__main__":
     # creating size + background
     image = create_image(IMAGE_HEIGHT, IMAGE_WIDTH)
-
     image_pil = Image.fromarray(image, 'RGB')
 
-    #TODO convert 3D cube centers to 2D cube centers
+    cubes = [CUBE1, CUBE2, CUBE3, CUBE4]
+    order_to_draw = draw_order(CAMERA_POS, cubes)
 
-    # cube1
-    create_cube(center_pos1, 0, 0, CUBE1_ROT.z, image_pil)
-    # cube2
-    create_cube(center_pos2, 0, 0, CUBE4_ROT.z, image_pil)
+    print(f"The order in which the cubes should be drawn is:")
+    for cube in order_to_draw:
+        print(cube)
+        create_cube(cube.position, cube.rotation, image_pil, cube.colour)
 
     image_pil.save('image2.png')
     image_pil.show()
 
+
+
+# ======================================EXTRA======================================
+    
+# USE THIS TO DRAW 4 FACES OF A CUBE ALL IN DIFFERENT COLOURS IN create_cube
+
+    # # NOGA: fill the area of 4 points, also added to the function "image_pil" argument
+    # # # Fill the quadrilateral area with a specific color
+    # quadrilateral_points = [tuple(point) for point in projected_points[:4]]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
+
+    # quadrilateral_points = [tuple(point) for point in projected_points[4:]]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(180, 20, 15))  # Fill with red color
+
+    # # NOTE: the order of the points in the array matter!!!
+    # y = [projected_points[1], projected_points[0], projected_points[4], projected_points[5]]
+    # quadrilateral_points = [tuple(point) for point in y]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(12, 200, 15))  # Fill with red color
+
+    # # NOTE: the order of the points in the array matter!!!
+    # y = [projected_points[3], projected_points[2], projected_points[6], projected_points[7]]
+    # quadrilateral_points = [tuple(point) for point in y]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(180, 200, 15))  # Fill with red color
+
+
+
+
+# USE THIS TO DRAW 4 FACES OF A CUBE USING THE CUBES ACTUAL COLOUR
+    # # # Fill the quadrilateral area with a specific color
+    # quadrilateral_points = [tuple(point) for point in projected_points[:4]]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(cube_colour))  
+
+    # quadrilateral_points = [tuple(point) for point in projected_points[4:]]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(cube_colour)) 
+
+    # # NOTE: the order of the points in the array matter!!!
+    # y = [projected_points[1], projected_points[0], projected_points[4], projected_points[5]]
+    # quadrilateral_points = [tuple(point) for point in y]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(cube_colour))  
+
+    # # NOTE: the order of the points in the array matter!!!
+    # y = [projected_points[3], projected_points[2], projected_points[6], projected_points[7]]
+    # quadrilateral_points = [tuple(point) for point in y]
+    # draw = ImageDraw.Draw(image_pil)
+    # draw.polygon(quadrilateral_points, fill=(cube_colour))  #

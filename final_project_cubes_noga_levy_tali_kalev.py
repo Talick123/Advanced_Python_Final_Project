@@ -119,7 +119,7 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
         rotated3d = np.dot(get_rotation_mat_z(rotation_angle.z),point)
         # translate point relative to cube's position (center of cube)
         translated_point = rotated3d + np.array([cube_center.x, cube_center.y, cube_center.z])
-        # translate points to view from camera angle
+        # save transformed 3d point
         transformed_points_3d[i] = translated_point
 
         # convert from 3d point to 2d point using camera angle's view point

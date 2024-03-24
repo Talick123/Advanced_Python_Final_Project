@@ -7,6 +7,7 @@ from collections import namedtuple
 IMAGE_HEIGHT = 1080
 IMAGE_WIDTH = 1920
 XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"], defaults=(0,))
+CUBE_FACES = namedtuple("CUBE_FACES", ["bottom", "top", "front", "back", "left", "right"], defaults=(0,))
 IMAGE_CENTER = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
 SCALE = 350
 
@@ -40,9 +41,9 @@ projection_matrix = np.array([
 
 # calculated manually
 camera_xyz = np.array([
-    [0.621, 0.782, 0], #X'
-    [-0.265, 0.211, 0.941], #Y'
-    [0.736, -0.585, 0.338], #Z'
+    [0.621, 0.782, 0], # X'
+    [0.265, -0.211, -0.941], # -Y' 
+    [0.736, -0.585, 0.338], # Z'
 ])
 
 # Define the camera's view direction (Z' vector from camera_xyz matrix)
@@ -59,6 +60,15 @@ faces = [
     [1, 2, 6, 5], # Right face
 ]
 
+faces_k = CUBE_FACES(
+    [0, 1, 2, 3], # Bottom face
+    [5, 6, 7, 4], # Top face
+    [0, 1, 5, 4], # Front face
+    [2, 3, 7, 6], # Back face
+    [0, 3, 7, 4], # Left face
+    [1, 2, 6, 5], # Right face
+)
+
 points = np.array([[-0.5, -0.5, -0.5],  # index 0
                    [0.5, -0.5, -0.5],   # index 1
                    [0.5, 0.5, -0.5],    # index 2
@@ -72,20 +82,6 @@ projected_points = np.zeros((len(points),2))
 
 # ====================CALCULATION MATRICES====================
 # functions to get the roation matrix by given angle for each axis
-
-def get_rotation_mat_x(angle):
-    return np.array([
-        [1, 0, 0],
-        [0, np.cos(angle), -np.sin(angle)],
-        [0, np.sin(angle), np.cos(angle)],
-    ])
-
-def get_rotation_mat_y(angle):
-    return np.array([
-        [np.cos(angle), 0, np.sin(angle)],
-        [0, 1, 0],
-        [-np.sin(angle), 0, np.cos(angle)],
-    ])
 
 def get_rotation_mat_z(angle):
     return np.array([
@@ -118,7 +114,7 @@ def calculate_normal_of_cube_face(p1, p2, p3, p4):
     normal = normal / np.linalg.norm(normal)
     return normal
 
-def should_draw_face(points, face_indices):
+def should_draw_face_normal(points, face_indices):
     '''
     Function to determine if a face should be drawn by calculating the dot product the vector representing
     the normal of the face of the cube and the vector representing the camera angle
@@ -146,20 +142,21 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
     Main function to create cubes in 2D image given 3D position and rotation.
     Receives center position of cube, rotation angle and image on which we are projecting.
     '''
-    rotation_x = get_rotation_mat_x(rotation_angle.x)
-    rotation_y = get_rotation_mat_y(rotation_angle.y)
     rotation_z = get_rotation_mat_z(rotation_angle.z)
 
     # Initialize an array to hold the transformed 3D points
     transformed_points_3d = np.zeros_like(points)
+    transformed_points_no_camera = np.zeros_like(points)
 
     for i, point in enumerate(points):
         # rotate object
-        rotated3d = np.dot(rotation_z, np.dot(rotation_y, np.dot(rotation_x, point)))
+        rotated3d = np.dot(rotation_z,point)
         # translate point relative to cube's position (center of cube)
         translated_point = rotated3d + np.array([cube_center.x, cube_center.y, cube_center.z])
         # translate points to view from camera angle
         transformed_points_3d[i] = np.dot(camera_xyz, translated_point)
+        # noga: 
+        transformed_points_no_camera[i] = translated_point
 
         # convert from 3d point to 2d point
         projected2d = np.dot(projection_matrix, transformed_points_3d[i])
@@ -169,14 +166,42 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
 
         projected_points[i] = [x, y]
 
+    # noga: added the names of the faces but need to delete it later because it takes too much time to proccess 
     # Check if each face should be drawn
-    for face_indices in faces:
-        if should_draw_face(transformed_points_3d, face_indices):
-            print(f"Face {face_indices} should be drawn.")
+    # for face_indices in faces: # before
+    for face_name, face_indices in zip(CUBE_FACES._fields, faces_k):
+        # if should_draw_face_normal(transformed_points_3d, face_indices):
+        if should_draw_face_using_px(transformed_points_no_camera, face_indices, cube_center):
+            print(f"draw <{face_name}>")
             face_points_2d = [projected_points[i] for i in face_indices]
+            
+            # noga: tried to calculate colour with light source, it works but not right and very ugly
+            # =======================
+            # # Get the corner points of the face
+            # p1, p2, p3, p4 = [points[i] for i in face_indices]
+            # # Calculate the normal vector of the face
+            # normal = calculate_normal_of_cube_face(p1, p2, p3, p4)
+            # # Calculate the dot product of the normal vector and the camera's view direction
+            # light = np.dot(normal, LIGHT_SOURCE)        
+            # cube_colour = tuple(abs(int(value * light)) for value in cube_colour)
+            # =======================
+
             draw_face(image_pil, face_points_2d, cube_colour)
-        else:
-            print(f"Face {face_indices} should not be drawn.")
+        # else:
+            # print(f"Face <{face_name}> should not be drawn.")
+
+def should_draw_face_using_px(points, face_indices, center):
+    '''
+    Function to determine if a face should be drawn by calculating the vector between the center of
+    face and cube center
+    '''
+    # Get the corner points of the face 
+    p1, p2, p3, p4 = [points[i] for i in face_indices]
+    x = midpoint = (p2 + p4) / 2      # center of the current face
+    vector_p = x - center             # vector from the cube center to x
+    vec = np.dot(vector_p, camera_view_direction)
+    return vec > 0
+
 
 def distance_from_camera(camera_pos, cube_pos):
     '''
@@ -208,8 +233,6 @@ if __name__ == "__main__":
 
     print(f"The order in which the cubes should be drawn is:")
     for cube in order_to_draw:
-        # if cube.name != "CUBE4":
-        #     continue
         print(cube)
         create_cube(cube.position, cube.rotation, image_pil, cube.colour)
 

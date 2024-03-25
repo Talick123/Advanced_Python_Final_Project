@@ -155,7 +155,8 @@ def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
     '''
     # Find light source's relative angle on object and change colour accordingly
     light = np.dot(face_normal_vector, LIGHT_SOURCE)        
-    cube_colour = tuple(int(value * light) for value in cube_colour)
+    I = 0.15 + 0.85 * (max(0, light)) #noga: in "Tips" file it says to write 0.05 + 0.95 * max. but i changed it to 0.15 and 0.85
+    cube_colour = tuple(int(value * I) for value in cube_colour)
 
     # Draw face of cube using 2D points + calculated colour
     face_points = [(point[0], point[1]) for point in face_points_2d]
@@ -199,8 +200,8 @@ def draw_order(camera_pos, cubes):
 # ====================MAIN FUNCTION====================
 if __name__ == "__main__":
     # Creating size + background
-    image = create_image(IMAGE_HEIGHT, IMAGE_WIDTH)
-    image_pil = Image.fromarray(image, 'RGB')
+    image_np = create_image(IMAGE_HEIGHT, IMAGE_WIDTH)
+    image_pil = Image.fromarray(image_np, 'RGB')
 
     # Find the order in which to draw the cubes depending on distance from camera
     cubes = [CUBE1, CUBE2, CUBE3, CUBE4]
@@ -210,6 +211,19 @@ if __name__ == "__main__":
     for cube in order_to_draw:
         print(cube)
         create_cube(cube.position, cube.rotation, image_pil, cube.colour)
+
+    # gamma correction:
+    image_np = np.array(image_pil)
+    # Divide each RGB value by 255
+    image_np = image_np / 255.0
+    # Take the square root of each normalized RGB value
+    image_np = np.sqrt(image_np)
+    # Multiply each square root value by 255 to scale back to the original range
+    image_np = image_np * 255
+    # Convert the result back to integers
+    image_pil = image_np.astype(np.uint8)
+    # Convert the result back to PIL
+    image_pil = Image.fromarray(image_pil, 'RGB')
 
     # Save and show image
     image_pil.save('image2.png')

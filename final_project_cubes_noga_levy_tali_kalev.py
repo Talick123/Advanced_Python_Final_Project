@@ -9,6 +9,8 @@ from math import *
 from PIL import Image, ImageDraw
 from collections import namedtuple
 
+import time # DELETE LATER
+start_time = time.time()
 # ====================MACROS====================
 IMAGE_HEIGHT = 1080
 IMAGE_WIDTH = 1920
@@ -113,17 +115,23 @@ def create_cube(cube_center, rotation_angle, image_pil, cube_colour):
     transformed_points_3d = np.zeros_like(POINTS)
     # Initialize an array to hold the transformed points in 2D representation
     projected_points = np.zeros((len(POINTS),2))
+    cube_rotation = get_rotation_mat_z(rotation_angle.z)
+    projection_matrix_camera = np.dot(PROJECTION_MATRIX, CAMERA_XYZ) # NOGA: maybe change the name later
 
     for i, point in enumerate(POINTS):
+        rotated3d = np.dot(cube_rotation, point)
         # Rotate object using rotation matrix with z axis angle
-        rotated3d = np.dot(get_rotation_mat_z(rotation_angle.z),point)
         # translate point relative to cube's position (center of cube)
         translated_point = rotated3d + np.array([cube_center.x, cube_center.y, cube_center.z])
         # save transformed 3d point
         transformed_points_3d[i] = translated_point
 
+        # == NOGA: this is the same as (PROJECTION_MATRIX x CAMERA_XYZ) x translated_point.
+        # projected2d = np.dot(PROJECTION_MATRIX, np.dot(CAMERA_XYZ, translated_point))
+        # == NOGA: so projection_matrix_camera = PROJECTION_MATRIX x CAMERA_XYZ. and clculated outside the loop
         # convert from 3d point to 2d point using camera angle's view point
-        projected2d = np.dot(PROJECTION_MATRIX, np.dot(CAMERA_XYZ, translated_point))
+        projected2d = np.dot(projection_matrix_camera, translated_point)
+
         # scale the x and y coordinates and place relative to center of image
         x = int(projected2d[0] * SCALE) + IMAGE_CENTER[0]
         y = int(projected2d[1] * SCALE) + IMAGE_CENTER[1]
@@ -155,7 +163,7 @@ def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
     '''
     # Find light source's relative angle on object and change colour accordingly
     light = np.dot(face_normal_vector, LIGHT_SOURCE)        
-    I = 0.15 + 0.85 * (max(0, light)) #noga: in "Tips" file it says to write 0.05 + 0.95 * max. but i changed it to 0.15 and 0.85
+    I = 0.15 + 0.85 * (max(0, light)) # NOGA: in "Tips" file it says to write 0.05 + 0.95 * max. but i changed it to 0.15 and 0.85 K?
     cube_colour = tuple(int(value * I) for value in cube_colour)
 
     # Draw face of cube using 2D points + calculated colour
@@ -209,22 +217,28 @@ if __name__ == "__main__":
 
     # Loop over order to draw cubes and draw them in image
     for cube in order_to_draw:
-        print(cube)
         create_cube(cube.position, cube.rotation, image_pil, cube.colour)
 
     # gamma correction:
     image_np = np.array(image_pil)
+
+    # NOGA: we can delete this: (but maybe later)
     # Divide each RGB value by 255
-    image_np = image_np / 255.0
-    # Take the square root of each normalized RGB value
-    image_np = np.sqrt(image_np)
-    # Multiply each square root value by 255 to scale back to the original range
-    image_np = image_np * 255
-    # Convert the result back to integers
-    image_pil = image_np.astype(np.uint8)
+    # image_np = image_np / 255.0
+    # # Take the square root of each normalized RGB value
+    # image_np = np.sqrt(image_np)
+    # # Multiply each square root value by 255 to scale back to the original range
+    # image_np = image_np * 255
+    # # Convert the result back to integers
+    # image_pil = image_np.astype(np.uint8)
+
+    # NOGA: same as the above
+    image_pil = (np.sqrt(image_np / 255.0) * 255).astype(np.uint8)
+
     # Convert the result back to PIL
     image_pil = Image.fromarray(image_pil, 'RGB')
 
     # Save and show image
     image_pil.save('image2.png')
+    print("--- %s seconds ---" % (time.time() - start_time))
     image_pil.show()

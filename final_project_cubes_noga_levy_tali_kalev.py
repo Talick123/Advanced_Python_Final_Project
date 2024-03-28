@@ -10,7 +10,6 @@ Modules Used: NumPy, PIL
 '''
 
 import numpy as np
-from math import *
 from PIL import Image, ImageDraw
 from collections import namedtuple
 

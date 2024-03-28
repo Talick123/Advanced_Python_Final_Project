@@ -1,10 +1,11 @@
 '''
-Project By: Noga Levy and Tali Kalev
-Lesson: Advanced Python
+Project By: Noga Levy ID: 315260927
+            Tali Kalev ID: 208629691
+Course: Advanced Python
 Date: March 31, 2024
 
 OS: Windows 11
-Python Version: 3.10.2
+Python Version: 3.11.7
 Modules Used: NumPy, PIL
 '''
 
@@ -14,15 +15,15 @@ from PIL import Image, ImageDraw
 from collections import namedtuple
 
 # ====================MACROS====================
+SCALE        = 250
 IMAGE_HEIGHT = 1080
-IMAGE_WIDTH = 1920
-XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"], defaults=(0,))
+IMAGE_WIDTH  = 1920
 IMAGE_CENTER = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
-SCALE = 250
+XYZ_VALUES   = namedtuple("XYZ_VALUES", ["x", "y", "z"], defaults=(0,))
 
 # ====================GIVEN DATA====================
-CAMERA_POS   = XYZ_VALUES(0.736, -0.585, 0.338)
-LIGHT_SOURCE = XYZ_VALUES(0.563, 0.139, 0.815)
+CAMERA_POS        = XYZ_VALUES(0.736, -0.585, 0.338)
+LIGHT_SOURCE      = XYZ_VALUES(0.563, 0.139, 0.815)
 BACKGROUND_COLOUR = np.array([0.5, 0.5, 0.5]) * 255 # PIL need 0-255 values and not 0-1 rgb values # RGB
 
 class CubeData():
@@ -30,13 +31,10 @@ class CubeData():
     This Class contains all the data pertaining to a cube in the image including: position, rotation and colour
     '''
     def __init__(self, name, position, rotation, colour):
-        self.name = name
+        self.name     = name
         self.position = position
         self.rotation = rotation
-        self.colour = colour
-
-    def __str__(self):
-        return f"{self.name}: Colour {self.colour}"
+        self.colour   = colour
 
 CUBE1 = CubeData(name="CUBE1", position=XYZ_VALUES(1.58, 0.08, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-57.7)), colour=np.array([0.6, 0.6, 0.6]) * 255) # GREY
 CUBE2 = CubeData(name="CUBE2", position=XYZ_VALUES(0.58, -1.2, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-55.9)), colour=np.array([0.75, 0.5, 0.2]) * 255) # ORANGE
@@ -51,24 +49,24 @@ CAMERA_VIEW_DIRECTION = np.array([CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z])
 PROJECTION_MATRIX = np.array([
     [1, 0, 0],
     [0, 1, 0],
-    # [0, 0, 0] # not necessary
 ])
 
-# calculated manually
+# Calculated manually using the instructions given. Y' is a vector that is perpendicular with the -Z' vector.
+# The X' vector is perpendicular to the Z axis and was calculated by the cross product of the Y' and Z' (X' = Y' x Z').
 CAMERA_XYZ = np.array([
     [0.621, 0.782, 0], # X'
-    [0.265, -0.211, -0.941], # -Y' 
+    [0.265, -0.211, -0.941], # Y' 
     [0.736, -0.585, 0.338], # Z'
 ])
 
-# indexed corners of cubes
+# Indexed corners of a cube identifying a face
 FACES = [
-    [0, 1, 2, 3], # Bottom face
-    [5, 6, 7, 4], # Top face
-    [0, 1, 5, 4], # Front face
-    [2, 3, 7, 6], # Back face
-    [0, 3, 7, 4], # Left face
-    [1, 2, 6, 5], # Right face
+    [0, 1, 2, 3], # Bottom
+    [5, 6, 7, 4], # Top
+    [0, 1, 5, 4], # Front
+    [2, 3, 7, 6], # Back
+    [0, 3, 7, 4], # Left
+    [1, 2, 6, 5], # Right
 ]
 
 POINTS = np.array([[-0.5, -0.5, -0.5],  # index 0
@@ -84,7 +82,7 @@ POINTS = np.array([[-0.5, -0.5, -0.5],  # index 0
 
 def get_rotation_mat_z(angle):
     '''
-    function to get the roation matrix by given angle for each z
+    Function to get the roation matrix by given angle for z axis
     '''
     return np.array([
         [np.cos(angle), -np.sin(angle), 0],
@@ -102,7 +100,7 @@ def create_image(height, width):
     image[0:height, 0:width] = BACKGROUND_COLOUR
     return image
 
-def create_cube(cube_center, rotation_angle, image_pil, cube_colour): 
+def create_cube(cube_center, rotation_angle, cube_colour, image_pil): 
     '''
     Main function to create cubes in 2D image given 3D position and rotation.
     Receives center position of cube, rotation angle, cube colour and image on which we are projecting.
@@ -137,12 +135,7 @@ def find_face_normal_vector(points, face_indices, cube_center):
     # Calculate vector from middle of cube to cube face
     vector_p = midpoint - cube_center
     # Normalize the vector using np.linalg.norm
-    norm_vector_p = np.linalg.norm(vector_p)
-    # Avoid division by zero in case of a zero vector
-    if norm_vector_p == 0:
-        return vector_p
-    else:
-        return vector_p / norm_vector_p  # return normalized vector
+    return vector_p /  np.linalg.norm(vector_p)  # return normalized vector
     
 def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
     '''
@@ -168,8 +161,8 @@ def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
 
 def draw_faces_of_cube(transformed_points_3d, cube_center, projected_points, cube_colour, image_pil):
     '''
-    Using the 3D transformed points and the 2D points, for each face of the cube we decide if it faces
-    the angle of the camera and if it does, draws it in our image
+    Using the 3D transformed points, for each face of the cube we decide if it faces
+    the angle of the camera and if it does, draws it in our image using the 2D points.
     '''
     for face_indices in FACES:
         face_normal_vector = find_face_normal_vector(transformed_points_3d,face_indices, cube_center)
@@ -180,7 +173,7 @@ def draw_faces_of_cube(transformed_points_3d, cube_center, projected_points, cub
 
 def distance_from_camera(camera_pos, cube_pos):
     '''
-    Function to calculate the distance from the camera to a cube using the cube center point
+    Function to calculate the distance from the camera to a cube using the cube center point.
     '''
     return np.sqrt((camera_pos.x - cube_pos.x) ** 2 + 
                    (camera_pos.y - cube_pos.y) ** 2 + 
@@ -188,9 +181,9 @@ def distance_from_camera(camera_pos, cube_pos):
 
 def draw_order(camera_pos, cubes):
     '''
-    Function to determine the order in which the cubes are drawn
+    Function to determine the order in which the cubes are drawn.
     Returns list of CubeData objects where the first item should be drawn first as it is the furthest away
-    from the camera and the last object is the closets
+    from the camera and the last object is the closest.
     '''
     # Calculate the distance from the camera to each cube and store it with the cube's identifier
     distances = [(cube, distance_from_camera(camera_pos, cube.position)) for cube in cubes]
@@ -211,17 +204,16 @@ if __name__ == "__main__":
 
     # Loop over order to draw cubes and draw them in image
     for cube in order_to_draw:
-        create_cube(cube.position, cube.rotation, image_pil, cube.colour)
+        create_cube(cube.position, cube.rotation, cube.colour, image_pil)
 
-    # gamma correction:
+    # Gamma correction:
     image_np = np.array(image_pil)
-
-    # NOGA: same as the above
     image_pil = (np.sqrt(image_np / 255.0) * 255).astype(np.uint8)
 
     # Convert the result back to PIL
     image_pil = Image.fromarray(image_pil, 'RGB')
 
-    # Save and show image
-    image_pil.save('image2.png')
+    # Enable this line to save image
+    # image_pil.save('image.png')
+    # Show image
     image_pil.show()

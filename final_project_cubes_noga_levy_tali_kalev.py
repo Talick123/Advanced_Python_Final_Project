@@ -2,6 +2,10 @@
 Project By: Noga Levy and Tali Kalev
 Lesson: Advanced Python
 Date: March 31, 2024
+
+OS: Windows 11
+Python Version: 3.10.2
+Modules Used: NumPy, PIL
 '''
 
 import numpy as np
@@ -9,20 +13,17 @@ from math import *
 from PIL import Image, ImageDraw
 from collections import namedtuple
 
-import time # DELETE LATER
-start_time = time.time()
 # ====================MACROS====================
 IMAGE_HEIGHT = 1080
 IMAGE_WIDTH = 1920
 XYZ_VALUES = namedtuple("XYZ_VALUES", ["x", "y", "z"], defaults=(0,))
 IMAGE_CENTER = [IMAGE_WIDTH/2, IMAGE_HEIGHT/2]
-SCALE = 350
+SCALE = 250
 
 # ====================GIVEN DATA====================
 CAMERA_POS   = XYZ_VALUES(0.736, -0.585, 0.338)
 LIGHT_SOURCE = XYZ_VALUES(0.563, 0.139, 0.815)
 BACKGROUND_COLOUR = np.array([0.5, 0.5, 0.5]) * 255 # PIL need 0-255 values and not 0-1 rgb values # RGB
-# BACKGROUND_COLOUR = np.array([170, 170, 170])  # PIL need 0-255 values and not 0-1 rgb values # RGB
 
 class CubeData():
     '''
@@ -41,13 +42,6 @@ CUBE1 = CubeData(name="CUBE1", position=XYZ_VALUES(1.58, 0.08, 0.5), rotation=XY
 CUBE2 = CubeData(name="CUBE2", position=XYZ_VALUES(0.58, -1.2, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-55.9)), colour=np.array([0.75, 0.5, 0.2]) * 255) # ORANGE
 CUBE3 = CubeData(name="CUBE3", position=XYZ_VALUES(-0.75, 0.43, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-56.5)), colour=np.array([0.7, 0.3, 0.7]) * 255) # PURPLE
 CUBE4 = CubeData(name="CUBE4", position=XYZ_VALUES(0.67, 1.15, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(0)), colour=np.array([0.47, 0.8, 0.42]) * 255) # GREEN
-
-
-# CUBE1 = CubeData(name="CUBE1", position=XYZ_VALUES(1.58, 0.08, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-57.7)), colour=np.array([178, 178, 178])) # GREY
-# CUBE2 = CubeData(name="CUBE2", position=XYZ_VALUES(0.58, -1.2, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-55.9)), colour=np.array([188, 171, 128])) # ORANGE
-# CUBE3 = CubeData(name="CUBE3", position=XYZ_VALUES(-0.75, 0.43, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(-56.5)), colour=np.array([185, 147, 186])) # PURPLE
-# CUBE4 = CubeData(name="CUBE4", position=XYZ_VALUES(0.67, 1.15, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(0)), colour=np.array([ 168, 191, 163])) # GREEN
-
 
 # ====================MATRICES CONSTANTS====================
 # Define the camera's view direction (Z' vector from CAMERA_XYZ matrix)
@@ -87,9 +81,11 @@ POINTS = np.array([[-0.5, -0.5, -0.5],  # index 0
                    [-0.5, 0.5, 0.5]])   # index 7
 
 # ====================CALCULATION MATRICES====================
-# functions to get the roation matrix by given angle for each axis
 
 def get_rotation_mat_z(angle):
+    '''
+    function to get the roation matrix by given angle for each z
+    '''
     return np.array([
         [np.cos(angle), -np.sin(angle), 0],
         [np.sin(angle), np.cos(angle), 0],
@@ -109,37 +105,24 @@ def create_image(height, width):
 def create_cube(cube_center, rotation_angle, image_pil, cube_colour): 
     '''
     Main function to create cubes in 2D image given 3D position and rotation.
-    Receives center position of cube, rotation angle and image on which we are projecting.
+    Receives center position of cube, rotation angle, cube colour and image on which we are projecting.
     '''
-    # Initialize an array to hold the transformed 3D points
-    transformed_points_3d = np.zeros_like(POINTS)
-    # Initialize an array to hold the transformed points in 2D representation
-    projected_points = np.zeros((len(POINTS),2))
+    # Precompute the rotation matrix and projection matrix
     cube_rotation = get_rotation_mat_z(rotation_angle.z)
-    projection_matrix_camera = np.dot(PROJECTION_MATRIX, CAMERA_XYZ) # NOGA: maybe change the name later
+    projection_matrix_camera = np.dot(PROJECTION_MATRIX, CAMERA_XYZ)
 
-    for i, point in enumerate(POINTS):
-        rotated3d = np.dot(cube_rotation, point)
-        # Rotate object using rotation matrix with z axis angle
-        # translate point relative to cube's position (center of cube)
-        translated_point = rotated3d + np.array([cube_center.x, cube_center.y, cube_center.z])
-        # save transformed 3d point
-        transformed_points_3d[i] = translated_point
+    # Vectorized rotation and translation of points
+    rotated_points = np.dot(POINTS, cube_rotation.T)
+    translated_points = rotated_points + cube_center
 
-        # == NOGA: this is the same as (PROJECTION_MATRIX x CAMERA_XYZ) x translated_point.
-        # projected2d = np.dot(PROJECTION_MATRIX, np.dot(CAMERA_XYZ, translated_point))
-        # == NOGA: so projection_matrix_camera = PROJECTION_MATRIX x CAMERA_XYZ. and clculated outside the loop
-        # convert from 3d point to 2d point using camera angle's view point
-        projected2d = np.dot(projection_matrix_camera, translated_point)
+    # Vectorized projection from 3D to 2D
+    projected2d = np.dot(translated_points, projection_matrix_camera.T)
 
-        # scale the x and y coordinates and place relative to center of image
-        x = int(projected2d[0] * SCALE) + IMAGE_CENTER[0]
-        y = int(projected2d[1] * SCALE) + IMAGE_CENTER[1]
+    # Vectorized scaling and centering of points
+    projected_points = np.rint(projected2d[:, :2] * SCALE + IMAGE_CENTER).astype(int)
 
-        # Save cube point in 2D representation
-        projected_points[i] = [x, y]
-
-    draw_faces_of_cube(transformed_points_3d, cube_center, projected_points, cube_colour, image_pil) 
+    # Draw the faces of the cube
+    draw_faces_of_cube(translated_points, cube_center, projected_points, cube_colour, image_pil)
 
 
 def find_face_normal_vector(points, face_indices, cube_center):
@@ -148,28 +131,40 @@ def find_face_normal_vector(points, face_indices, cube_center):
     Returns the normal vector of the face.
     '''
     # Retrieve relevant points according to indices
-    p1, p2, p3, p4 = [points[i] for i in face_indices]
+    p1, p2, p3, p4 = points[face_indices]
     # Find midpoint of the cube face
     midpoint = (p2 + p4) / 2
     # Calculate vector from middle of cube to cube face
     vector_p = midpoint - cube_center
-    return vector_p / np.linalg.norm(vector_p) # return normalized vector
-
+    # Normalize the vector using np.linalg.norm
+    norm_vector_p = np.linalg.norm(vector_p)
+    # Avoid division by zero in case of a zero vector
+    if norm_vector_p == 0:
+        return vector_p
+    else:
+        return vector_p / norm_vector_p  # return normalized vector
+    
 def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
     '''
-    Receives: image to draw on, 4 2D points, cube colour
+    Receives: image to draw on, 4 2D points, cube colour, and the normal vector of the cube's face.
     Draws the face of the cube represented by the 4 points onto the image taking into account the light source
     to change the shading on the cube face accordingly.
     '''
-    # Find light source's relative angle on object and change colour accordingly
-    light = np.dot(face_normal_vector, LIGHT_SOURCE)        
-    I = 0.15 + 0.85 * (max(0, light)) # NOGA: in "Tips" file it says to write 0.05 + 0.95 * max. but i changed it to 0.15 and 0.85 K?
-    cube_colour = tuple(int(value * I) for value in cube_colour)
+    # Calculate the dot product of the face normal vector and the light source
+    light_intensity = np.dot(face_normal_vector, LIGHT_SOURCE)
+    # Calculate the intensity of the light on the face
+    I = 0.15 + 0.85 * np.clip(light_intensity, 0, 1)
+    # Apply the light intensity to the cube colour
+    shaded_colour = (cube_colour * I).astype(int)
+    # Convert the shaded colour to a tuple
+    shaded_colour_tuple = tuple(shaded_colour.tolist())
+    
+    # Convert face_points_2d from a NumPy array to a list of tuples
+    face_points_list = [tuple(point) for point in face_points_2d]
 
-    # Draw face of cube using 2D points + calculated colour
-    face_points = [(point[0], point[1]) for point in face_points_2d]
+    # Draw the face of the cube using the PIL library
     draw = ImageDraw.Draw(image_pil)
-    draw.polygon(face_points, fill=(cube_colour))
+    draw.polygon(face_points_list, fill=shaded_colour_tuple)
 
 def draw_faces_of_cube(transformed_points_3d, cube_center, projected_points, cube_colour, image_pil):
     '''
@@ -204,7 +199,6 @@ def draw_order(camera_pos, cubes):
     # Return the order in which the cubes should be drawn
     return [cube[0] for cube in sorted_cubes]
 
-
 # ====================MAIN FUNCTION====================
 if __name__ == "__main__":
     # Creating size + background
@@ -222,16 +216,6 @@ if __name__ == "__main__":
     # gamma correction:
     image_np = np.array(image_pil)
 
-    # NOGA: we can delete this: (but maybe later)
-    # Divide each RGB value by 255
-    # image_np = image_np / 255.0
-    # # Take the square root of each normalized RGB value
-    # image_np = np.sqrt(image_np)
-    # # Multiply each square root value by 255 to scale back to the original range
-    # image_np = image_np * 255
-    # # Convert the result back to integers
-    # image_pil = image_np.astype(np.uint8)
-
     # NOGA: same as the above
     image_pil = (np.sqrt(image_np / 255.0) * 255).astype(np.uint8)
 
@@ -240,5 +224,4 @@ if __name__ == "__main__":
 
     # Save and show image
     image_pil.save('image2.png')
-    print("--- %s seconds ---" % (time.time() - start_time))
     image_pil.show()

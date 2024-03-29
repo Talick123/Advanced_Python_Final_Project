@@ -41,32 +41,36 @@ CUBE3 = CubeData(name="CUBE3", position=XYZ_VALUES(-0.75, 0.43, 0.5), rotation=X
 CUBE4 = CubeData(name="CUBE4", position=XYZ_VALUES(0.67, 1.15, 0.5), rotation=XYZ_VALUES(0, 0, np.deg2rad(0)), colour=np.array([0.47, 0.8, 0.42]) * 255) # GREEN
 
 # ====================MATRICES CONSTANTS====================
-# Define the camera's view direction (Z' vector from CAMERA_XYZ matrix)
-CAMERA_VIEW_DIRECTION = np.array([CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z])
+
+def calc_camera():
+    '''
+    Calculated manually using the instructions given. Y' is a vector that is perpendicular with the -Z' vector.
+    The X' vector is perpendicular to the Z axis and was calculated by the cross product of the Y' and Z'.
+    Y'=[-Z'x, -Z'y, c] , Y' * Z' = 0 <=> 0 = -(Z'x)^2 -(Z'y)^2 + Z'z*c <=> c = ((Z'x)^2 + (Z'y)^2)/Z'z
+    X' = Y' x Z'
+    '''
+    c = ((CAMERA_POS.x) ** 2 + (CAMERA_POS.y) ** 2) / CAMERA_POS.z
+    camera_y_axis = np.array([-CAMERA_POS.x, -CAMERA_POS.y, c])
+    camera_y_axis = camera_y_axis /  np.linalg.norm(camera_y_axis) # normal
+    camera_z_axis = np.array(CAMERA_POS)
+    camera_x_axis = np.cross(camera_y_axis, camera_z_axis)
+    camera_axis = np.array([camera_x_axis, -camera_y_axis, camera_z_axis])
+    return camera_axis
+
+# Calculated camera
+CAMERA_XYZ = calc_camera()
 
 # This is used to convert a 3D point to a 2D point
-PROJECTION_MATRIX = np.array([
-    [1, 0, 0],
-    [0, 1, 0],
-])
-
-# Calculated manually using the instructions given. Y' is a vector that is perpendicular with the -Z' vector.
-# The X' vector is perpendicular to the Z axis and was calculated by the cross product of the Y' and Z' (X' = Y' x Z').
-CAMERA_XYZ = np.array([
-    [0.621, 0.782, 0], # X'
-    [0.265, -0.211, -0.941], # Y' 
-    [0.736, -0.585, 0.338], # Z'
-])
+PROJECTION_MATRIX = np.array([[1, 0, 0],
+                              [0, 1, 0]])
 
 # Indexed corners of a cube identifying a face
-FACES = [
-    [0, 1, 2, 3], # Bottom
-    [5, 6, 7, 4], # Top
-    [0, 1, 5, 4], # Front
-    [2, 3, 7, 6], # Back
-    [0, 3, 7, 4], # Left
-    [1, 2, 6, 5], # Right
-]
+FACES = np.array([[0, 1, 2, 3], # Bottom
+                  [5, 6, 7, 4], # Top
+                  [0, 1, 5, 4], # Front
+                  [2, 3, 7, 6], # Back
+                  [0, 3, 7, 4], # Left
+                  [1, 2, 6, 5]]) # Right
 
 POINTS = np.array([[-0.5, -0.5, -0.5],  # index 0
                    [0.5, -0.5, -0.5],   # index 1
@@ -83,11 +87,9 @@ def get_rotation_mat_z(angle):
     '''
     Function to get the roation matrix by given angle for z axis
     '''
-    return np.array([
-        [np.cos(angle), -np.sin(angle), 0],
-        [np.sin(angle), np.cos(angle), 0],
-        [0, 0, 1],
-    ])
+    return np.array([[np.cos(angle), -np.sin(angle), 0],
+                     [np.sin(angle), np.cos(angle), 0],
+                     [0, 0, 1]])
 
 # ====================IMAGE CREATION FUNCTIONS==================== 
 def create_image(height, width):
@@ -134,7 +136,7 @@ def find_face_normal_vector(points, face_indices, cube_center):
     # Calculate vector from middle of cube to cube face
     vector_p = midpoint - cube_center
     # Normalize the vector using np.linalg.norm
-    return vector_p /  np.linalg.norm(vector_p)  # return normalized vector
+    return vector_p / np.linalg.norm(vector_p)  # return normalized vector
     
 def draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector):
     '''
@@ -166,7 +168,7 @@ def draw_faces_of_cube(transformed_points_3d, cube_center, projected_points, cub
     for face_indices in FACES:
         face_normal_vector = find_face_normal_vector(transformed_points_3d,face_indices, cube_center)
         # Check if face is in the direction of camera view
-        if (np.dot(face_normal_vector, CAMERA_VIEW_DIRECTION) > 0):
+        if (np.dot(face_normal_vector, CAMERA_XYZ[2]) > 0):
             face_points_2d = [projected_points[i] for i in face_indices]
             draw_face(image_pil, face_points_2d, cube_colour, face_normal_vector)
 
@@ -212,7 +214,7 @@ if __name__ == "__main__":
     # Convert the result back to PIL
     image_pil = Image.fromarray(image_pil, 'RGB')
 
-    # Enable this line to save image
+    # Note: Enable this line to save image
     # image_pil.save('image.png')
     # Show image
     image_pil.show()
